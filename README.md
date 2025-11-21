@@ -97,7 +97,3 @@ Ouvrez ce lien dans votre navigateur pour utiliser l'application.
 * **Cause :** Le backend ne tourne pas.
 * **Solution :** Vérifiez que le terminal du backend est bien ouvert et n'a pas planté.
 
-### 🔴 Frontend : Style cassé ou erreur Tailwind
-* **Cause :** Version incompatible de Tailwind.
-* **Solution :** Dans le dossier `jeux-front`, forcez la version stable :
-    `npm install -D tailwindcss@3.4.17 postcss autoprefixer`
