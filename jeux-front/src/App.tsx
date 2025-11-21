@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Gamepad2, Trash2, Plus, Trophy, CheckCircle2, Circle, AlertCircle, X } from 'lucide-react';
+import { Gamepad2, Trash2, Plus, Trophy, CheckCircle2, Circle, AlertCircle, X, Pencil, Save } from 'lucide-react';
 
 interface Game {
     _id: string;
@@ -36,6 +36,7 @@ function App() {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedGame, setSelectedGame] = useState<Game | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
 
     const initialFormState: GameFormData = {
         titre: '', editeur: '', genre: '', plateforme: '',
@@ -63,9 +64,7 @@ function App() {
             if (!res.ok) throw new Error();
             const data = await res.json();
             setGames(Array.isArray(data) ? data : []);
-        } catch {
-            setGames([]);
-        }
+        } catch { setGames([]); }
     };
 
     const fetchStats = async () => {
@@ -74,9 +73,7 @@ function App() {
             if (!res.ok) throw new Error();
             const data = await res.json();
             setStats(data);
-        } catch {
-            setStats({});
-        }
+        } catch { setStats({}); }
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,9 +84,32 @@ function App() {
         }));
     };
 
+    const handleStartEdit = (game: Game, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setError(null);
+        setEditingId(game._id);
+        setFormData({
+            titre: game.titre,
+            editeur: game.editeur || '',
+            genre: game.genre.join(', '),
+            plateforme: game.plateforme.join(', '),
+            annee_sortie: game.annee_sortie ? game.annee_sortie.toString() : '',
+            metacritic_score: game.metacritic_score ? game.metacritic_score.toString() : '',
+            termine: game.termine
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setFormData(initialFormState);
+        setError(null);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+
         const payload = {
             ...formData,
             genre: formData.genre.split(',').map(s => s.trim()).filter(s => s),
@@ -97,32 +117,46 @@ function App() {
             annee_sortie: formData.annee_sortie ? Number(formData.annee_sortie) : undefined,
             metacritic_score: formData.metacritic_score ? Number(formData.metacritic_score) : undefined
         };
+
         try {
-            const res = await fetch(`${API_BASE}/games`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            let res;
+            if (editingId) {
+                res = await fetch(`${API_BASE}/games/${editingId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                res = await fetch(`${API_BASE}/games`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            }
+
             const data = await res.json();
+
             if (!res.ok) {
                 if (data.errors && Array.isArray(data.errors)) throw new Error(data.errors.join("\n"));
                 if (data.error) throw new Error(data.error);
-                throw new Error("Erreur inconnue lors de l'ajout.");
+                throw new Error("Erreur inconnue.");
             }
-            setFormData(initialFormState);
+
+            handleCancelEdit();
             fetchData();
         } catch (err: any) {
-            setError(err.message || "Impossible d'ajouter le jeu.");
+            setError(err.message || "Une erreur est survenue.");
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm("Supprimer ce jeu ?")) {
+        if (window.confirm("Voulez-vous vraiment supprimer ce jeu ?")) {
             try {
                 await fetch(`${API_BASE}/games/${id}`, { method: 'DELETE' });
+                if (editingId === id) handleCancelEdit();
                 fetchData();
             } catch {
-                alert("Erreur suppression");
+                alert("Erreur lors de la suppression");
             }
         }
     };
@@ -141,9 +175,11 @@ function App() {
             </nav>
 
             {error && (
-                <div className="mb-8 flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-600 border border-red-100 whitespace-pre-wrap">
-                    <AlertCircle size={20} className="mt-0.5 shrink-0" />
-                    <span>{error}</span>
+                <div className="mx-auto mt-6 max-w-6xl px-6">
+                    <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-600 border border-red-100 whitespace-pre-wrap">
+                        <AlertCircle size={20} className="mt-0.5 shrink-0" />
+                        <span>{error}</span>
+                    </div>
                 </div>
             )}
 
@@ -152,7 +188,7 @@ function App() {
                     <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
                         {[
                             { label: "Jeux", val: stats.totalJeux, icon: Gamepad2, suffix: "" },
-                            { label: "Moyenne", val: stats.scoreMoyen?.toFixed(0), icon: Trophy, suffix: "/100" }
+                            { label: "Score Moyen", val: stats.scoreMoyen?.toFixed(0), icon: Trophy, suffix: "/100" }
                         ].map((stat, i) => (
                             <div key={i} className="rounded-3xl bg-white p-6 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-gray-100">
                                 <div className="flex items-center gap-2 text-gray-400 mb-2 text-xs font-bold uppercase tracking-wider">
@@ -166,9 +202,20 @@ function App() {
 
                 <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
                     <div className="lg:col-span-4">
-                        <div className="sticky top-24 rounded-3xl bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] border border-gray-100">
-                            <h2 className="mb-1 text-xl font-bold">Nouveau Jeu</h2>
-                            <p className="mb-6 text-sm text-gray-500">Ajouter un titre à la collection.</p>
+                        <div className={`sticky top-24 rounded-3xl bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] border transition-colors ${editingId ? 'border-blue-200 ring-2 ring-blue-50' : 'border-gray-100'}`}>
+                            <div className="flex justify-between items-center mb-1">
+                                <h2 className="text-xl font-bold text-gray-900">
+                                    {editingId ? 'Modifier le jeu' : 'Nouveau Jeu'}
+                                </h2>
+                                {editingId && (
+                                    <button onClick={handleCancelEdit} className="text-xs font-medium text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors">
+                                        Annuler
+                                    </button>
+                                )}
+                            </div>
+                            <p className="mb-6 text-sm text-gray-500">
+                                {editingId ? 'Modifiez les informations ci-dessous.' : 'Ajouter un titre à la collection.'}
+                            </p>
 
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 {['titre', 'editeur', 'genre', 'plateforme'].map((field) => (
@@ -185,24 +232,23 @@ function App() {
                                 ))}
 
                                 <div className="grid grid-cols-2 gap-3">
-                                    <input type="number" name="annee_sortie" value={formData.annee_sortie}
-                                           onChange={handleInputChange} placeholder="Année"
+                                    <input type="number" name="annee_sortie" value={formData.annee_sortie} onChange={handleInputChange} placeholder="Année"
                                            className="w-full rounded-xl border-0 bg-gray-50 px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"/>
-                                    <span className="text-[11px] font-bold text-gray-400">Score: <span
-                                        className="text-gray-900">{formData.metacritic_score}</span></span>
+                                    <input type="number" name="metacritic_score" value={formData.metacritic_score} onChange={handleInputChange} placeholder="Score (0-100)"
+                                           className="w-full rounded-xl border-0 bg-gray-50 px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"/>
                                 </div>
 
-                                <label
-                                    className="flex cursor-pointer items-center justify-between rounded-xl bg-gray-50 p-3 hover:bg-gray-100 transition-colors">
-                                <span className="text-sm font-medium text-gray-700">Jeu terminé ?</span>
+                                <label className="flex cursor-pointer items-center justify-between rounded-xl bg-gray-50 p-3 hover:bg-gray-100 transition-colors">
+                                    <span className="text-sm font-medium text-gray-700">Jeu terminé ?</span>
                                     <div className="relative">
                                         <input type="checkbox" name="termine" checked={formData.termine} onChange={handleInputChange} className="peer sr-only" />
                                         <div className="h-6 w-11 rounded-full bg-gray-300 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full"></div>
                                     </div>
                                 </label>
 
-                                <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 hover:bg-blue-700 active:scale-95 transition-all">
-                                    <Plus size={18} /> Ajouter
+                                <button type="submit" className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition-all active:scale-95 ${editingId ? 'bg-blue-700 shadow-blue-900/20' : 'bg-blue-600 shadow-blue-500/30 hover:bg-blue-700'}`}>
+                                    {editingId ? <Save size={18} /> : <Plus size={18} />}
+                                    {editingId ? 'Mettre à jour' : 'Ajouter'}
                                 </button>
                             </form>
                         </div>
@@ -215,8 +261,11 @@ function App() {
 
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             {games.map((game) => (
-                                <div key={game._id} className="group relative flex flex-col justify-between rounded-3xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 cursor-pointer"
-                                     onClick={() => setSelectedGame(game)}>
+                                <div
+                                    key={game._id}
+                                    onClick={() => setSelectedGame(game)}
+                                    className={`group relative flex flex-col justify-between rounded-3xl bg-white p-5 shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer ${editingId === game._id ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-100'}`}
+                                >
                                     <div className="mb-4">
                                         <div className="flex items-start justify-between">
                                             <h3 className="text-lg font-bold leading-tight text-gray-900 line-clamp-1" title={game.titre}>{game.titre}</h3>
@@ -244,14 +293,24 @@ function App() {
                                                     <Circle size={12} /> En cours
                                                 </span>
                                             )}
-                                            {game.metacritic_score && (
-                                                <span className="text-[11px] font-bold text-gray-400">Score: <span className="text-gray-900">{game.metacritic_score}</span></span>
-                                            )}
                                         </div>
 
-                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(game._id); }} className="rounded-full p-2 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors">
-                                            <Trash2 size={16} />
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={(e) => handleStartEdit(game, e)}
+                                                className="rounded-full p-2 text-gray-300 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                                title="Modifier"
+                                            >
+                                                <Pencil size={16} />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(game._id); }}
+                                                className="rounded-full p-2 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                title="Supprimer"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -268,44 +327,68 @@ function App() {
             </main>
 
             {selectedGame && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="relative max-w-lg w-full bg-white rounded-2xl p-6">
-                        <button onClick={() => setSelectedGame(null)}
-                                className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100">
-                            <X size={20}/>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4" onClick={() => setSelectedGame(null)}>
+                    <div className="relative max-w-lg w-full bg-white rounded-3xl p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setSelectedGame(null)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 text-gray-400">
+                            <X size={24}/>
                         </button>
-                        <h2 className="text-xl font-bold mb-2">{selectedGame.titre}</h2>
-                        <p className="text-sm text-gray-500 mb-2">{selectedGame.editeur} {selectedGame.annee_sortie && `• ${selectedGame.annee_sortie}`}</p>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {selectedGame.genre.map((g, i) => (
-                                <span key={i}
-                                      className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md text-xs">{g}</span>
-                            ))}
+
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedGame.titre}</h2>
+                            <p className="text-base text-gray-500">{selectedGame.editeur} {selectedGame.annee_sortie && `• ${selectedGame.annee_sortie}`}</p>
                         </div>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {selectedGame.plateforme.map((p, i) => (
-                                <span key={i}
-                                      className="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-xs">{p}</span>
-                            ))}
+
+                        <div className="space-y-6">
+                            <div>
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Genres</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedGame.genre.map((g, i) => (
+                                        <span key={i} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm font-medium">{g}</span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Plateformes</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedGame.plateforme.map((p, i) => (
+                                        <span key={i} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-sm font-medium">{p}</span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-6 border-t border-gray-100">
+                                <div>
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Metascore</h4>
+                                    <span className="text-2xl font-bold text-gray-900">{selectedGame.metacritic_score || 'N/A'}</span>
+                                </div>
+
+                                <div className="text-right">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Statut</h4>
+                                    {selectedGame.termine ? (
+                                        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                                            <CheckCircle2 size={16}/> Terminé
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-full">
+                                            <Circle size={16}/> En cours
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-[11px] font-bold text-gray-400">Score: <span className="text-gray-900 ml-1">{selectedGame.metacritic_score}</span></p>
-                        <div className="flex items-center gap-3">
-                            {selectedGame.termine ? (
-                                <span
-                                    className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
-                        <CheckCircle2 size={12}/> Terminé
-                    </span>
-                            ) : (
-                                <span
-                                    className="flex items-center gap-1 text-[11px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
-                        <Circle size={12}/> En cours
-                    </span>
-                            )}
+
+                        <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end gap-3">
+                            <button
+                                onClick={(e) => { setSelectedGame(null); handleStartEdit(selectedGame, e); }}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-50 text-blue-600 font-semibold hover:bg-blue-100 transition-colors"
+                            >
+                                <Pencil size={18} /> Modifier
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
-
         </div>
     );
 }
