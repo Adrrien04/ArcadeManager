@@ -3,6 +3,8 @@
 Ce projet est une application web permettant de gérer une bibliothèque de jeux vidéo.
 
 <img width="3071" height="1791" alt="image" src="https://github.com/user-attachments/assets/7fe57ec5-e5eb-4097-b9ee-209832ec8399" />
+<img width="3038" height="1754" alt="image" src="https://github.com/user-attachments/assets/716ccdd7-5fd3-493a-bbec-bcf3cbcf3671" />
+
 
 
 ## 📁 Structure du projet
@@ -96,4 +98,5 @@ Ouvrez ce lien dans votre navigateur pour utiliser l'application.
 ### 🔴 Frontend : Erreur rouge "Serveur indisponible"
 * **Cause :** Le backend ne tourne pas.
 * **Solution :** Vérifiez que le terminal du backend est bien ouvert et n'a pas planté.
+
 
